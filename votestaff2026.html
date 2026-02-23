@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Back to School - International Best Dressed</title>
+    <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;600&display=swap" rel="stylesheet">
+    <script src="https://www.gstatic.com/firebasejs/9.1.3/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.1.3/firebase-database-compat.js"></script>
+    <style>
+        :root { --primary: #4e73df; --secondary: #1cc88a; --danger: #e74a3b; --dark: #5a5c69; }
+        * { box-sizing: border-box; font-family: 'Kanit', sans-serif; }
+        body { background-color: #f0f2f5; margin: 0; padding: 0; color: var(--dark); }
+        .nav-tabs { display: flex; background: white; position: sticky; top: 0; z-index: 1000; box-shadow: 0 2px 10px rgba(0,0,0,0.1); justify-content: center; }
+        .tab-item { padding: 15px 20px; cursor: pointer; border-bottom: 3px solid transparent; transition: 0.3s; font-weight: 600; }
+        .tab-item.active { color: var(--primary); border-bottom: 3px solid var(--primary); }
+        .container { max-width: 1000px; margin: 20px auto; padding: 0 15px; }
+        .content { display: none; animation: fadeIn 0.5s; }
+        .content.active { display: block; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        #reg-popup { position: fixed; inset: 0; background: rgba(0,0,0,0.85); display: flex; align-items: center; justify-content: center; z-index: 2000; }
+        .popup-box { background: white; padding: 30px; border-radius: 20px; width: 90%; max-width: 400px; text-align: center; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 20px; }
+        .card { background: white; border-radius: 15px; overflow: hidden; box-shadow: 0 4px 15px rgba(0,0,0,0.05); text-align: center; }
+        .card img { width: 100%; height: 320px; object-fit: cover; background: #eee; }
+        .card-body { padding: 15px; }
+        input { width: 100%; padding: 12px; margin: 10px 0; border: 2px solid #eee; border-radius: 8px; outline: none; }
+        .btn { border: none; padding: 12px 20px; border-radius: 8px; cursor: pointer; font-weight: 600; width: 100%; transition: 0.2s; }
+        .btn-vote { background: var(--primary); color: white; }
+        .btn-voted { background: #ccc; color: #666; cursor: not-allowed; }
+        .admin-item { display: flex; align-items: center; gap: 15px; background: white; padding: 15px; margin-bottom: 10px; border-radius: 10px; border: 1px solid #ddd; }
+        .admin-item img { width: 80px; height: 80px; border-radius: 8px; object-fit: cover; }
+        .upload-btn { background: #f3f4f6; border: 2px dashed #ccc; padding: 10px; cursor: pointer; border-radius: 8px; display: block; margin-top: 5px; font-size: 0.8rem; }
+        table { width: 100%; border-collapse: collapse; background: white; border-radius: 10px; overflow: hidden; }
+        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #eee; font-size: 0.9rem; }
+        th { background: var(--primary); color: white; }
+    </style>
+</head>
+<body>
+
+    <div id="reg-popup">
+        <div class="popup-box">
+            <h2 style="margin-top:0">Back to School โหวต 🎒</h2>
+            <p>กรุณาลงทะเบียนเบอร์โทรศัพท์ (1 เบอร์ / 1 โหวต)</p>
+            <input type="tel" id="user-phone" placeholder="ระบุเบอร์โทรศัพท์ 10 หลัก" maxlength="10">
+            <button class="btn btn-vote" onclick="login()">เข้าสู่หน้าโหวต</button>
+        </div>
+    </div>
+
+    <div class="nav-tabs">
+        <div class="tab-item active" onclick="switchTab(0)">🗳️ โหวต</div>
+        <div class="tab-item" onclick="switchTab(1)">📊 คะแนน</div>
+        <div class="tab-item" onclick="switchTab(2)">⚙️ จัดการรูป</div>
+        <div class="tab-item" onclick="switchTab(3)">📋 รายชื่อ</div>
+    </div>
+
+    <div class="container">
+        <div id="tab-vote" class="content active">
+            <div style="display:flex; justify-content: space-between; margin-bottom: 20px;">
+                <span>เบอร์ของคุณ: <b id="display-phone">-</b></span>
+                <button onclick="logout()" style="color:var(--danger); border:none; background:none; cursor:pointer">ออกจากระบบ</button>
+            </div>
+            <div class="grid" id="vote-grid">กำลังโหลดข้อมูล...</div>
+        </div>
+
+        <div id="tab-result" class="content">
+            <h2>📊 อันดับคะแนนโหวต (Realtime)</h2>
+            <div id="result-container"></div>
+        </div>
+
+        <div id="tab-admin" class="content">
+            <div id="admin-lock" class="popup-box" style="margin: 50px auto; border: 1px solid #ddd;">
+                <h3>🔐 Admin Access</h3>
+                <input type="password" id="admin-pass" placeholder="รหัสผ่านผู้ดูแล">
+                <button class="btn btn-vote" style="background:var(--dark)" onclick="unlockAdmin()">ยืนยัน</button>
+            </div>
+            <div id="admin-content" style="display:none">
+                <h2>⚙️ คลิกเพื่ออัปโหลดรูปภาพใหม่</h2>
+                <div id="admin-list"></div>
+                <button class="btn" style="background:var(--danger); color:white; margin-top:20px;" onclick="resetSystem()">🧨 ล้างคะแนนทั้งหมด</button>
+            </div>
+        </div>
+
+        <div id="tab-logs" class="content">
+            <h2>📋 ข้อมูลการลงทะเบียนและการโหวต</h2>
+            <div id="logs-locked" style="text-align:center; padding:50px;">กรุณาปลดล็อครหัสผ่านหน้า Admin ก่อน</div>
+            <table id="logs-table" style="display:none">
+                <thead><tr><th>เวลา</th><th>เบอร์โทร</th><th>โหวตเลข</th></tr></thead>
+                <tbody id="voter-table-body"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        const firebaseConfig = {
+            apiKey: "AIzaSyBg4LzxXAJ2fzXvwzGEXNMVja6Ycrhb6so",
+            authDomain: "backtoschoolvote.firebaseapp.com",
+            projectId: "backtoschoolvote",
+            storageBucket: "backtoschoolvote.firebasestorage.app",
+            messagingSenderId: "789699804404",
+            appId: "1:789699804404:web:f1c417afb881c3cd0c72a1",
+            databaseURL: "https://backtoschoolvote-default-rtdb.asia-southeast1.firebasedatabase.app" 
+        };
+
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.database();
+
+        let currentPhone = localStorage.getItem('currentPhone') || "";
+        const ADMIN_CODE = "534087";
+        let hasVoted = false;
+
+        db.ref('contestants').on('value', (snapshot) => {
+            const data = snapshot.val();
+            if (!data) { initSystem(); } else {
+                renderVoting(data);
+                renderResults(data);
+                renderAdmin(data);
+            }
+        });
+
+        db.ref('voterLogs').on('value', (snapshot) => {
+            const logs = snapshot.val() || {};
+            hasVoted = Object.values(logs).some(l => l.phone === currentPhone);
+            renderLogs(logs);
+            db.ref('contestants').once('value', (s) => renderVoting(s.val()));
+        });
+
+        function initSystem() {
+            const contestants = {};
+            for(let i=1; i<=12; i++) {
+                contestants[i] = { id: i, votes: 0, img: "https://via.placeholder.com/400x500?text=No+Image" };
+            }
+            db.ref('contestants').set(contestants);
+        }
+
+        function login() {
+            const phone = document.getElementById('user-phone').value.trim();
+            if (phone.length !== 10) return alert("กรุณากรอกเบอร์โทร 10 หลัก");
+            currentPhone = phone;
+            localStorage.setItem('currentPhone', phone);
+            document.getElementById('reg-popup').style.display = 'none';
+            document.getElementById('display-phone').innerText = phone;
+            location.reload(); 
+        }
+
+        function logout() { localStorage.removeItem('currentPhone'); location.reload(); }
+
+        function renderVoting(data) {
+            const grid = document.getElementById('vote-grid');
+            if(!data) return;
+            grid.innerHTML = Object.values(data).map(item => `
+                <div class="card">
+                    <img src="${item.img}">
+                    <div class="card-body">
+                        <h3>หมายเลข ${item.id}</h3>
+                        <button class="btn ${hasVoted ? 'btn-voted' : 'btn-vote'}" 
+                                onclick="handleVote(${item.id})" ${hasVoted ? 'disabled' : ''}>
+                            ${hasVoted ? 'คุณใช้สิทธิ์ไปแล้ว' : 'โหวต'}
+                        </button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        async function handleVote(id) {
+            if (!currentPhone) return alert("กรุณาลงทะเบียนก่อนโหวต");
+            const snapshot = await db.ref('voterLogs').once('value');
+            const logs = snapshot.val() || {};
+            const alreadyVoted = Object.values(logs).some(l => l.phone === currentPhone);
+            if (alreadyVoted) {
+                alert("เบอร์โทรศัพท์นี้ได้ใช้สิทธิ์โหวตไปแล้วครับ");
+                hasVoted = true;
+                return;
+            }
+            if (!confirm(`ยืนยันการโหวตให้หมายเลข ${id}?`)) return;
+            db.ref(`contestants/${id}/votes`).transaction(c => (c || 0) + 1);
+            db.ref('voterLogs').push({
+                phone: currentPhone,
+                votedFor: id,
+                time: new Date().toLocaleString('th-TH')
+            });
+            alert("ขอบคุณสำหรับคะแนนโหวตครับ!");
+        }
+
+        function handleFileUpload(input, id) {
+            const file = input.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (e) => db.ref(`contestants/${id}/img`).set(e.target.result);
+            reader.readAsDataURL(file);
+        }
+
+        function renderResults(data) {
+            if(!data) return;
+            const sorted = Object.values(data).sort((a,b) => b.votes - a.votes);
+            document.getElementById('result-container').innerHTML = sorted.map((c, i) => `
+                <div class="admin-item" style="border-left: 5px solid ${i==0?'gold':'#4e73df'}">
+                    <img src="${c.img}">
+                    <div style="flex-grow:1"><b>อันดับ ${i+1}:</b> หมายเลข ${c.id}</div>
+                    <div style="font-size:1.3rem; font-weight:bold; color:var(--primary)">${c.votes} โหวต</div>
+                </div>
+            `).join('');
+        }
+
+        function renderAdmin(data) {
+            if(!data) return;
+            document.getElementById('admin-list').innerHTML = Object.values(data).map(c => `
+                <div class="admin-item">
+                    <img src="${c.img}">
+                    <div style="flex-grow:1">
+                        <b>ผู้สมัครหมายเลข ${c.id}</b>
+                        <label class="upload-btn">
+                            📸 อัปโหลดรูปใหม่
+                            <input type="file" accept="image/*" style="display:none" onchange="handleFileUpload(this, ${c.id})">
+                        </label>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function renderLogs(logs) {
+            const body = document.getElementById('voter-table-body');
+            body.innerHTML = Object.values(logs).reverse().map(l => `
+                <tr><td>${l.time}</td><td>${l.phone}</td><td>หมายเลข ${l.votedFor}</td></tr>
+            `).join('');
+        }
+
+        function unlockAdmin() {
+            if (document.getElementById('admin-pass').value === ADMIN_CODE) {
+                document.getElementById('admin-lock').style.display = 'none';
+                document.getElementById('admin-content').style.display = 'block';
+                document.getElementById('logs-table').style.display = 'table';
+                document.getElementById('logs-locked').style.display = 'none';
+            } else { alert("รหัสผ่านไม่ถูกต้อง"); }
+        }
+
+        function switchTab(index) {
+            document.querySelectorAll('.content').forEach((t, i) => t.classList.toggle('active', i === index));
+            document.querySelectorAll('.tab-item').forEach((n, i) => n.classList.toggle('active', i === index));
+        }
+
+        function resetSystem() {
+            if(confirm("⚠️ คำเตือน: คุณต้องการล้างคะแนนโหวตและประวัติทั้งหมดให้เป็นศูนย์ใช่หรือไม่?")) {
+                // 1. ลบประวัติการโหวตทั้งหมด
+                db.ref('voterLogs').remove();
+
+                // 2. ดึงข้อมูลผู้สมัครปัจจุบันและสั่งแก้คะแนนให้เป็น 0 ทุกคน
+                db.ref('contestants').once('value', snapshot => {
+                    const data = snapshot.val();
+                    const updates = {};
+                    for(let id in data) {
+                        updates[`contestants/${id}/votes`] = 0;
+                    }
+                    
+                    db.ref().update(updates, (error) => {
+                        if (error) {
+                            alert("เกิดข้อผิดพลาดในการรีเซ็ตคะแนน");
+                        } else {
+                            alert("✅ รีเซ็ตคะแนนและประวัติโหวตเรียบร้อยแล้ว ทุกเบอร์จะกลับมาโหวตใหม่ได้อีกครั้ง");
+                        }
+                    });
+                });
+            }
+        }
+
+        window.onload = () => {
+            if (currentPhone) {
+                document.getElementById('reg-popup').style.display = 'none';
+                document.getElementById('display-phone').innerText = currentPhone;
+            }
+        };
+    </script>
+</body>
+</html>
